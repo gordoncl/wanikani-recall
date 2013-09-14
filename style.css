@@ -1,0 +1,102 @@
+header {
+  margin: 0 auto;
+  margin-bottom: 50px;
+}
+
+header img {
+  height: 100px;
+}
+
+header p {
+  margin-top: 10px;
+  margin-left: 15px;
+}
+
+header button.btn {
+  padding: 0px;
+  margin: 0px;
+}
+
+.container {
+  display: none;
+  margin: 0 auto;
+}
+
+/**
+ * Login container.
+ */
+body.login #login-container {
+  display: block;
+}
+
+#login-container button {
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
+#login-container .text-danger, #login-container .status {
+  text-align: center;
+}
+
+#login-container .processing {
+  display: none;
+}
+
+/**
+ * Levels container.
+ */
+ body.levels #levels-container {
+  display: block;
+ }
+
+#levels-container .levels {
+  text-align: center;
+  margin-bottom: 10px;
+}
+
+#levels-container .levels select {
+  max-height: 250px;
+  width: 200px;
+}
+
+#levels-container .actions {
+  text-align: center;
+}
+
+/**
+ * Word container.
+ */
+ body.word #word-container {
+  display: block;
+ }
+
+#word-container .wrapper, #paper, #canvas {
+  width: 570px;
+  height: 109px;
+  margin-bottom: 10px;
+}
+
+#word-container .wrapper {
+  border: 1px solid;
+  position: relative;
+}
+
+#word-container .overlay {
+  position: absolute;
+  text-align: center;
+  width: 570px;
+  top: 48px;
+  opacity: 0.5;
+}
+
+#word-container .meaning {
+  height: 30px;
+}
+
+#word-container .word, #word-container .meaning, #word-container .actions {
+  text-align: center;
+ }
+
+#word-container .underline {
+  text-decoration: underline;
+}
