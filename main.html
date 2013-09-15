@@ -21,6 +21,7 @@
         <h2 class="form-signin-header">Please Enter API Key</h2>
         <input type="text" id="api-key" class="form-control" placeholder="API Key">
         <button id="submit" class="btn btn-block btn-large btn-primary">Submit Key</button>
+        <p class="text-info"></p>
         <p class="text-danger"></p>
       </form>
     </div>
@@ -33,6 +34,16 @@
           <p class="message"></p>
 
           <div class="levels">
+            <label class="checkbox-inline">
+              <input type="checkbox" value="radical"> Radicals
+            </label>
+            <label class="checkbox-inline">
+              <input type="checkbox" value="kanji" checked> Kanji
+            </label>
+            <label class="checkbox-inline">
+              <input type="checkbox" value="vocabulary"> Vocabulary
+            </label>
+            <div class="clearfix"></div>
             <select multiple="multiple"></select>
           </div>
 
@@ -43,7 +54,7 @@
       </form>
     </div>
 
-    <div id="word-container" class="container">
+    <div id="item-container" class="container">
       <div class="wrapper canvas-wrapper">
         <div class="overlay">Draw here</div>
         <canvas id="canvas" width="570" height="109"></canvas>
@@ -54,7 +65,7 @@
         <div id="paper"></div>
       </div>
 
-      <p class="word">&nbsp;</p>
+      <p class="item">&nbsp;</p>
       <p class="meaning"></p>
       <div class="actions">
         <!--

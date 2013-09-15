@@ -3,6 +3,8 @@
  */
 var App = {
   // Constants.
+  API_TIMEOUT: 30000,
+
   STROKE_WIDTH: 3,
 
   WANIKANI_API: "http://www.wanikani.com/api/user/",
@@ -14,17 +16,53 @@ var App = {
 
   deck: [],
 
+  item: null,
+
+  items: [],
+
   paper: Raphael("paper", 570, 109),
 
-  previousWords: [],
+  previousItems: [],
 
   revealed: false,
 
   user: {},
 
-  vocab: [],
+  /**
+   * Filters items, add type and append to items list.
+   */
+  _addItems: function(list, type) {
+    // Filter items that haven't been studied and don't have SVG object.
+    var list = jQuery.grep(list, jQuery.proxy(function(item) {
+      // No character.
+      if (!item.character) {
+        return false;
+      }
 
-  word: null,
+      // Not studied yet.
+      if (typeof item.stats == "undefined" || !item.stats) {
+        return false;
+      }
+
+      for(var i = 0; i < item.character.length; i++) {
+        var c = item.character[i];
+
+        if (typeof SVG[c] == "undefined") {
+          return false;
+        }
+      }
+
+      return true;
+    }, this));
+
+    // Add type.
+    list = jQuery.map(list, function(item) {
+      item.type = type;
+      return item;
+    });
+
+    this.items = jQuery.merge(this.items, list);
+  },
 
   /**
    * Builds a deck based on the levels the user has chosen
@@ -36,10 +74,13 @@ var App = {
 
     // Filter words that haven't been started or are not
     // in the selected levels.
+    var validTypes = jQuery("#levels-container input:checked").map(function() {
+      return jQuery(this).val();
+    });
     var validLevels = jQuery("#levels-container .levels select").val();
-    var vocab = jQuery.grep(this.vocab, function(word) {
-      if (jQuery.inArray(word.level.toString(), validLevels) == -1 || 
-        typeof word.stats == "undefined" || !word.stats) {
+    var items = jQuery.grep(this.items, function(item) {
+      if (jQuery.inArray(item.level.toString(), validLevels) == -1 || 
+        jQuery.inArray(item.type.toString(), validTypes) == -1) {
         return false;
       }
 
@@ -47,8 +88,8 @@ var App = {
     });
 
     // Shuffle.
-    for(var i = 0; i < vocab.length; i++) {
-      deck.push(vocab[i]);
+    for(var i = 0; i < items.length; i++) {
+      deck.push(items[i]);
 
       var swapIndex = Math.floor(Math.random() * i);
       var tmp = deck[swapIndex];
@@ -58,14 +99,17 @@ var App = {
     }
 
     this.deck = deck;
-    this.previousWords = [];
+    this.previousItems = [];
   },
 
   /**
    * Determines if the user can start studying.
    */
   canStartStudying: function() {
-    if (!jQuery("#levels-container .levels select").val()) {
+    var hasLevels = jQuery("#levels-container .levels select").val();
+    var hasTypes = jQuery("#levels-container .levels input:checked").length;
+
+    if (!hasLevels || !hasTypes) {
       jQuery("#levels-container .start-studying").hide();
     } else {
       jQuery("#levels-container .start-studying").show();
@@ -113,8 +157,8 @@ var App = {
     this.drawing = true;
 
     // Remove overlay
-    jQuery("#word-container .canvas-wrapper .overlay").hide();
-    jQuery("#word-container .canvas-wrapper").css("position", "static");
+    jQuery("#item-container .canvas-wrapper .overlay").hide();
+    jQuery("#item-container .canvas-wrapper").css("position", "static");
 
     this.context.beginPath();
     this.context.lineWidth = this.STROKE_WIDTH;
@@ -141,7 +185,7 @@ var App = {
       // 3 seconds for each character. Although distribution
       // might be a little off since we are not animating
       // by each character.
-      duration: (this.word.character.length * 3000),
+      duration: (this.item.character.length * 3000),
 
       step: $.proxy(function(pos, fx) {
           this.paper.clear();
@@ -189,7 +233,7 @@ var App = {
    */
   _getPaths: function() {
     // Generate paths.
-    var chars = this.word.character;
+    var chars = this.item.character;
 
     // Each character is 109 width, by default. Calculate some variables
     // that will help us align the characters properly.
@@ -236,46 +280,123 @@ var App = {
     jQuery("#login-container .btn-primary").attr("disabled", "disabled");
 
     // Get the users information and vocabulary.
-    var url = App.getApi(key, 'vocabulary');
+    this.items = [];
+    this._loginGetVocabulary(key);
+  },
+
+  /**
+   * Checks to see if the APIs return an error.
+   */
+  _loginHasErrorResponse: function(results) {
+    // Error exists, print the message.
+    if (typeof results["error"] != "undefined") {
+      this.setLoginError(results.error.message);
+      return true;
+    }
+
+    if (typeof results["user_information"] == "undefined" ||
+      typeof results["requested_information"] == "undefined")
+    {
+      this.setLoginError("Unexpected response from the server.");
+      return true;
+    }
+
+    return false;
+  },
+
+  /**
+   * Handles an AJAX error.
+   */
+  _loginErrorHelper: function(xhr, status, message) {
+    if (message == "timeout") {
+      message = "Response from server timed out";
+    }
+
+    this.setLoginError(message);
+  },
+
+  /**
+   * Retrieves the kanji. Takes the API key as a parameter.
+   */
+  _loginGetKanji: function(key) {
+    var url = this.getApi(key, 'kanji');
+
+    jQuery("#login-container .text-info").html("Getting kanji from server");
     jQuery.ajax(url, {
-      error: function(xhr, status, message) {
-        if (message == "timeout") {
-          message = "Response from server timed out";
-        }
+      error: jQuery.proxy(this._loginErrorHelper, this),
 
-        self.setLoginError(message);
-      },
-
-      success: function(results) {
+      success: jQuery.proxy(function(results) {
         // Error exists, print the message.
-        if (typeof results["error"] != "undefined") {
-          self.setLoginError(results.error.message);
+        if (this._loginHasErrorResponse(results)) {
           return;
         }
 
-        if (typeof results["user_information"] == "undefined" ||
-          typeof results["requested_information"] == "undefined" ||
-          typeof results["requested_information"]["general"] == "undefined") {
-          self.setLoginError("Unexpected response from the server.");
-        }
+        // Store kanji.
+        this._addItems(results["requested_information"], "kanji");
 
-        self.vocab = results["requested_information"]["general"];
-        self.user = results["user_information"];
+        // Get the radicals now.
+        this._loginGetRadicals(key);
+      }, this),
 
-        if (!self.vocab.length) {
-          self.setLoginError("You need to study some words, first!");
+      timeout: this.API_TIMEOUT
+    });
+  },
+
+  /**
+   * Retrieves the radicals. Takes the API key as a parameter.
+   */
+  _loginGetRadicals: function(key) {
+    var url = this.getApi(key, 'radicals');
+
+    jQuery("#login-container .text-info").html("Getting radicals from server");
+    jQuery.ajax(url, {
+      error: jQuery.proxy(this._loginErrorHelper, this),
+
+      success: jQuery.proxy(function(results) {
+        // Error exists, print the message.
+        if (this._loginHasErrorResponse(results)) {
           return;
         }
+
+        // Store Radicals.
+        this._addItems(results["requested_information"], "radical");
+
+        // Show that the user is logged in and display levels container.
+        this.setHeader();
+        this.showLevels(false);
+      }, this),
+
+      timeout: this.API_TIMEOUT
+    });
+  },
+
+  /**
+   * Retrieves the vocabulary. Takes the API key as a parameter.
+   */
+  _loginGetVocabulary: function(key) {
+    var url = this.getApi(key, 'vocabulary');
+
+    jQuery("#login-container .text-info").html("Getting vocabulary from server");
+    jQuery.ajax(url, {
+      error: jQuery.proxy(this._loginErrorHelper, this),
+
+      success: jQuery.proxy(function(results) {
+        // Error exists, print the message.
+        if (this._loginHasErrorResponse(results)) {
+          return;
+        }
+
+        this._addItems(results["requested_information"]["general"], "vocabulary");
+        this.user = results["user_information"];
 
         // Store the wanikani key.
         chrome.storage.sync.set({"wanikani-api-key": key});
 
-        // Build deck, set up word container and then display it.
-        self.setHeader();
-        self.showLevels(false);
-      },
+        // Retrieve the Kanji, now.
+        this._loginGetKanji(key);
+      }, this),
 
-      timeout: 30000
+      timeout: this.API_TIMEOUT
     });
   },
 
@@ -297,21 +418,41 @@ var App = {
   /**
    * Handles events that reveal the word to the user.
    */
-  revealWord: function() {
+  revealItem: function() {
     if (this.revealed) {
       return;
     }
 
     this.revealed = true;
 
+    // Set the display.
+    var display = "";
+    switch(this.item.type) {
+      case "vocabulary":
+        display = 
+          "Character(s): " + this.item.character + " " +
+          "Kana: " + this.item.kana +  " " +
+          "Level: " + this.item.level;
+        break;
+      case "radical":
+        display = 
+          "Character: " + this.item.character + " " +
+          "Level: " + this.item.level;
+        break;
+      case "kanji":
+        var important_reading = this.item.important_reading;
+        display = 
+          "Character: " + this.item.character + " " +
+          important_reading[0].toUpperCase() + important_reading.substr(1) + 
+            ": " + this.item[important_reading] +  " " +
+          "Level: " + this.item.level;
+        break;
+    }
+
     // Remove overlay
-    jQuery("#word-container .paper-wrapper .overlay").hide();
-    jQuery("#word-container .word").html(
-      "Kanji: " + this.word.character + " " +
-      "Kana: " + this.word.kana +  " " +
-      "Level: " + this.word.level
-    );
-    jQuery("#word-container .svg").show();
+    jQuery("#item-container .paper-wrapper .overlay").hide();
+    jQuery("#item-container .item").html(display);
+    jQuery("#item-container .svg").show();
     this.drawKanji();
   },
 
@@ -319,6 +460,7 @@ var App = {
    * Sets the welcome header once the user logs in.
    */
   setHeader: function() {
+    jQuery("#login-container .text-info").html("");
     jQuery("header .welcome").html("Welcome " + this.user.username + 
       ": <button class='btn btn-link logout'>Logout</button>");
   },
@@ -327,6 +469,7 @@ var App = {
    * Sets a login error message.
    */
   setLoginError: function(error) {
+    jQuery("#login-container .text-info").html("");
     jQuery("#login-container .text-danger").html(error ? error : "Uknown error");
     this.logout();
   },
@@ -344,30 +487,23 @@ var App = {
     // can partake in.
     jQuery("#levels-container .levels select").html("");
 
-    // Get words per level.
-    var wordCount = [];
-    jQuery.each(this.vocab, function(i, val) {
-      var level = val.level;
-      if (typeof wordCount[level] == "undefined") {
-        wordCount[level] = 0;
-      }
-
-      if (typeof val.stats != "undefined" && val.stats != null) {
-        wordCount[level]++;
-      }
-    });
+    // Get radicals, kanji and vocab per level.
+    var radicalCount = this._showLevelsCount("radical");
+    var kanjiCount = this._showLevelsCount("kanji");
+    var vocabCount = this._showLevelsCount("vocabulary");
 
     // Set the levels into the select box.
     for(var i = 1; i <= this.user.level; i++) {
-      var words = typeof wordCount[i] != "undefined" ? wordCount[i] : 0;
+      var radicals = typeof radicalCount[i] == "undefined" ? 0 : radicalCount[i];
+      var kanji = typeof kanjiCount[i] == "undefined" ? 0 : kanjiCount[i];
+      var vocab = typeof vocabCount[i] == "undefined" ? 0 : vocabCount[i];
 
-      // If there's a word count, don't list word.
-      if (!wordCount[i]) {
-        continue;
-      }
-
-      var option = '<option value="' + i + '" selected=selected>Level ' 
-        + i + ' (words: ' + wordCount[i] + ')' +
+      var option = '<option value="' + i + '" selected=selected>Level ' + i + 
+        ' (' +
+          'radicals: ' + radicals + " " +
+          'kanji: ' + kanji + " " + 
+          'vocab: ' + vocab +
+        ')' +
         '</option>';
       jQuery("#levels-container .levels select").append(option);
     }
@@ -377,22 +513,43 @@ var App = {
   },
 
   /**
+   * Function to help count items by level.
+   */
+  _showLevelsCount: function(type) {
+    var count = [];
+
+    jQuery.each(this.items, function(i, val) {
+      var level = val.level;
+
+      if (typeof count[level] == "undefined") {
+        count[level] = 0;
+      }
+
+      if (val.type == type) {
+        count[level]++;
+      }
+    });
+
+    return count;
+  },
+
+  /**
    * Handles when the back button is clicked.
    */
-  showLastWord: function() {
+  showLastItem: function() {
     // Because the current word is in the deck, we need
     // to push twice.
-    if (this.previousWords.length > 1) {
-      this.deck.push(this.previousWords.pop());
-      this.deck.push(this.previousWords.pop());
-      this.showNextWord();
+    if (this.previousItems.length > 1) {
+      this.deck.push(this.previousItems.pop());
+      this.deck.push(this.previousItems.pop());
+      this.showNextItem();
     }
   },
 
   /**
    * Handles setting up the word container for displaying the next word.
    */
-  showNextWord: function() {
+  showNextItem: function() {
     // Stop animation and clear canvas.
     jQuery("#paper").stop();
     this.paper.clear();
@@ -400,31 +557,31 @@ var App = {
     this.revealed = false;
 
     // Show overlays.
-    jQuery("#word-container .canvas-wrapper").css("position", "relative");
-    jQuery("#word-container .overlay").show();
+    jQuery("#item-container .canvas-wrapper").css("position", "relative");
+    jQuery("#item-container .overlay").show();
 
     // Clear words and insert new meaning.
-    jQuery("#word-container .word").html("&nbsp;");
-    jQuery("#word-container .meaning").html("&nbsp;");
+    jQuery("#item-container .item").html("&nbsp;");
+    jQuery("#item-container .meaning").html("&nbsp;");
 
     // Get new word and insert meaning.
-    this.word = this.deck.pop();
-    this.previousWords.push(this.word);
+    this.item = this.deck.pop();
+    this.previousItems.push(this.item);
 
     // If previous words is only length one, hide the button.
-    if (this.previousWords.length == 1) {
-      jQuery("#word-container button.back").hide();
+    if (this.previousItems.length == 1) {
+      jQuery("#item-container button.back").hide();
     } else {
-      jQuery("#word-container button.back").show();
+      jQuery("#item-container button.back").show();
     }
 
     // No words? Show levels, again.
-    if (typeof this.word == 'undefined') {
+    if (typeof this.item == 'undefined') {
       this.showLevels(true);
       return;
     }
 
-    jQuery("#word-container .meaning").html(this.word.meaning);
+    jQuery("#item-container .meaning").html(this.item.type + ": " + this.item.meaning);
   },
 
   /**
@@ -432,8 +589,8 @@ var App = {
    */
   startStudying: function() {
     this.buildDeck();
-    this.showNextWord();
-    jQuery("body").attr("class", "word");
+    this.showNextItem();
+    jQuery("body").attr("class", "item");
   }
 }
 
@@ -457,49 +614,50 @@ jQuery(document).on("click", "#login-container .btn-primary[disabled!=disabled]"
 jQuery(document).on("click", "header .logout", jQuery.proxy(App.logout, App));
 
 // User makes a change to study levels.
+jQuery(document).on("change", "#levels-container input", jQuery.proxy(App.canStartStudying, App));
 jQuery(document).on("change", "#levels-container select", jQuery.proxy(App.canStartStudying, App));
 
 // User clicks to start studying.
 jQuery(document).on("click", "#levels-container .start-studying", jQuery.proxy(App.startStudying, App));
 
 // When the user clicks the audio button.
-jQuery(document).on("click", "#word-container button.audio", jQuery.proxy(App.playAudio, App));
+jQuery(document).on("click", "#item-container button.audio", jQuery.proxy(App.playAudio, App));
 
 // When the user clicks the back button.
-jQuery(document).on("click", "#word-container button.back", jQuery.proxy(App.showLastWord, App));
+jQuery(document).on("click", "#item-container button.back", jQuery.proxy(App.showLastItem, App));
 
 // When the user clicks the reveal button.
-jQuery(document).on("click", "#word-container .paper-wrapper", jQuery.proxy(App.revealWord, App));
-jQuery(document).on("click", "#word-container button.reveal", jQuery.proxy(App.revealWord, App));
+jQuery(document).on("click", "#item-container .paper-wrapper", jQuery.proxy(App.revealItem, App));
+jQuery(document).on("click", "#item-container button.reveal", jQuery.proxy(App.revealItem, App));
 
 // When the user clicks for the next word.
-jQuery(document).on("click", "#word-container button.next", jQuery.proxy(App.showNextWord, App));
+jQuery(document).on("click", "#item-container button.next", jQuery.proxy(App.showNextItem, App));
 
 // If a user draws on the canvas.
-jQuery(document).on("click", "#word-container button.clear", function () {
+jQuery(document).on("click", "#item-container button.clear", function () {
   App.canvasClear(true);
 });
 
 // Listen for if the user presses a key.
 jQuery(window).on("keydown", function(e) {
-  if (jQuery("#word-container :visible").length > 0) {
+  if (jQuery("#item-container :visible").length > 0) {
 
     switch(String.fromCharCode(e.keyCode)) {
       case "c":
       case "C":
-        jQuery("#word-container button.clear").click();
+        jQuery("#item-container button.clear").click();
         break;
       case "r":
       case "R":
-        jQuery("#word-container button.reveal").click();
+        jQuery("#item-container button.reveal").click();
         break;
       case "b":
       case "B":
-        jQuery("#word-container button.back").click();
+        jQuery("#item-container button.back").click();
         break;
       case "n":
       case "N":
-        jQuery("#word-container button.next").click();
+        jQuery("#item-container button.next").click();
         break; 
     }
   }
