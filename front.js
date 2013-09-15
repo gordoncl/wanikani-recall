@@ -16,6 +16,8 @@ var App = {
 
   paper: Raphael("paper", 570, 109),
 
+  previousWords: [],
+
   revealed: false,
 
   user: {},
@@ -56,6 +58,7 @@ var App = {
     }
 
     this.deck = deck;
+    this.previousWords = [];
   },
 
   /**
@@ -374,6 +377,19 @@ var App = {
   },
 
   /**
+   * Handles when the back button is clicked.
+   */
+  showLastWord: function() {
+    // Because the current word is in the deck, we need
+    // to push twice.
+    if (this.previousWords.length > 1) {
+      this.deck.push(this.previousWords.pop());
+      this.deck.push(this.previousWords.pop());
+      this.showNextWord();
+    }
+  },
+
+  /**
    * Handles setting up the word container for displaying the next word.
    */
   showNextWord: function() {
@@ -393,6 +409,14 @@ var App = {
 
     // Get new word and insert meaning.
     this.word = this.deck.pop();
+    this.previousWords.push(this.word);
+
+    // If previous words is only length one, hide the button.
+    if (this.previousWords.length == 1) {
+      jQuery("#word-container button.back").hide();
+    } else {
+      jQuery("#word-container button.back").show();
+    }
 
     // No words? Show levels, again.
     if (typeof this.word == 'undefined') {
@@ -441,6 +465,9 @@ jQuery(document).on("click", "#levels-container .start-studying", jQuery.proxy(A
 // When the user clicks the audio button.
 jQuery(document).on("click", "#word-container button.audio", jQuery.proxy(App.playAudio, App));
 
+// When the user clicks the back button.
+jQuery(document).on("click", "#word-container button.back", jQuery.proxy(App.showLastWord, App));
+
 // When the user clicks the reveal button.
 jQuery(document).on("click", "#word-container .paper-wrapper", jQuery.proxy(App.revealWord, App));
 jQuery(document).on("click", "#word-container button.reveal", jQuery.proxy(App.revealWord, App));
@@ -465,6 +492,10 @@ jQuery(window).on("keydown", function(e) {
       case "r":
       case "R":
         jQuery("#word-container button.reveal").click();
+        break;
+      case "b":
+      case "B":
+        jQuery("#word-container button.back").click();
         break;
       case "n":
       case "N":
