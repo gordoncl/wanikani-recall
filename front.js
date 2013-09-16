@@ -3,7 +3,7 @@
  */
 var App = {
   // Constants.
-  API_TIMEOUT: 30000,
+  API_TIMEOUT: 60000,
 
   STROKE_WIDTH: 3,
 
