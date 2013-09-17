@@ -3,7 +3,7 @@
 
   "description": "Wanikani app that is used entirely to help recall and write Kanji. Requires Wanikani API key.",
 
-  "version": "0.4",
+  "version": "0.5",
 
   "app": {
     "background": {

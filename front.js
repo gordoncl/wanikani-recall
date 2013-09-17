@@ -20,6 +20,8 @@ var App = {
 
   items: [],
 
+  itemDistribution: [],
+
   paper: Raphael("paper", 570, 109),
 
   previousItems: [],
@@ -74,13 +76,11 @@ var App = {
 
     // Filter words that haven't been started or are not
     // in the selected levels.
-    var validTypes = jQuery("#levels-container input:checked").map(function() {
-      return jQuery(this).val();
-    });
-    var validLevels = jQuery("#levels-container .levels select").val();
+    var types = this._getStudyTypes();
+    var levels = this._getStudyLevels();
     var items = jQuery.grep(this.items, function(item) {
-      if (jQuery.inArray(item.level.toString(), validLevels) == -1 || 
-        jQuery.inArray(item.type.toString(), validTypes) == -1) {
+      if (jQuery.inArray(item.level.toString(), levels) == -1 || 
+        jQuery.inArray(item.type.toString(), types) == -1) {
         return false;
       }
 
@@ -106,13 +106,26 @@ var App = {
    * Determines if the user can start studying.
    */
   canStartStudying: function() {
-    var hasLevels = jQuery("#levels-container .levels select").val();
-    var hasTypes = jQuery("#levels-container .levels input:checked").length;
+    var levels = this._getStudyLevels();
+    var types = this._getStudyTypes();
 
-    if (!hasLevels || !hasTypes) {
+    if (!levels.length || !types.length) {
       jQuery("#levels-container .start-studying").hide();
+      jQuery("#levels-container .items-to-study").html("0");
     } else {
       jQuery("#levels-container .start-studying").show();
+
+      // Count the number of items to study.
+      var count = 0;
+      for(var i = 0; i < levels.length; i++) {
+        var level = levels[i];
+
+        for(var j = 0; j < types.length; j++) {
+          var type = types[j];
+          count += this._getItemDistribution(level, type);
+        }
+      }
+      jQuery("#levels-container .items-to-study").html(count);
     }
   },
 
@@ -227,6 +240,21 @@ var App = {
   },
 
   /**
+   * Gets the item distribution for the level and type.
+   */
+  _getItemDistribution: function(level, type) {
+    if (typeof this.itemDistribution[level] == "undefined") {
+      return 0;
+    }
+
+    if (typeof this.itemDistribution[level][type] == "undefined") {
+      return 0;
+    }
+
+    return this.itemDistribution[level][type];
+  },
+
+  /**
    * "Private" function designed to get the paths for the
    * current word. Uses the SVG variable in svg.js which
    * has a SVG object for each character.
@@ -267,6 +295,21 @@ var App = {
     }
 
     return paths.join(" ");
+  },
+
+  _getStudyLevels: function() {
+    return jQuery("#levels-container .levels select").val() || [];
+  },
+
+  /**
+   * Gets the study types chosen by the user.
+   */
+  _getStudyTypes: function() {
+    var checkboxes = jQuery("#levels-container input:checked");
+
+    return jQuery.map(checkboxes, function(checkbox) {
+      return jQuery(checkbox).val();
+    });
   },
 
   /**
@@ -360,6 +403,9 @@ var App = {
 
         // Store Radicals.
         this._addItems(results["requested_information"], "radical");
+
+        // Calculate the distribution.
+        this._setItemDistribution();
 
         // Show that the user is logged in and display levels container.
         this.setHeader();
@@ -466,6 +512,30 @@ var App = {
   },
 
   /**
+   * Function to help count how items were distributed.
+   */
+  _setItemDistribution: function() {
+    var distribution = [];
+
+    jQuery.each(this.items, function(i, val) {
+      var level = val.level;
+      var type = val.type;
+
+      if (typeof distribution[level] == "undefined") {
+        distribution[level] = {};
+      }
+
+      if (typeof distribution[level][type] == "undefined") {
+        distribution[level][type] = 0;
+      }
+
+      distribution[level][type]++;
+    });
+
+    this.itemDistribution = distribution;
+  },
+
+  /**
    * Sets a login error message.
    */
   setLoginError: function(error) {
@@ -487,22 +557,13 @@ var App = {
     // can partake in.
     jQuery("#levels-container .levels select").html("");
 
-    // Get radicals, kanji and vocab per level.
-    var radicalCount = this._showLevelsCount("radical");
-    var kanjiCount = this._showLevelsCount("kanji");
-    var vocabCount = this._showLevelsCount("vocabulary");
-
     // Set the levels into the select box.
     for(var i = 1; i <= this.user.level; i++) {
-      var radicals = typeof radicalCount[i] == "undefined" ? 0 : radicalCount[i];
-      var kanji = typeof kanjiCount[i] == "undefined" ? 0 : kanjiCount[i];
-      var vocab = typeof vocabCount[i] == "undefined" ? 0 : vocabCount[i];
-
       var option = '<option value="' + i + '" selected=selected>Level ' + i + 
         ' (' +
-          'radicals: ' + radicals + " " +
-          'kanji: ' + kanji + " " + 
-          'vocab: ' + vocab +
+          'radicals: ' + this._getItemDistribution(i, "radical") + " " +
+          'kanji: ' + this._getItemDistribution(i, "kanji") + " " + 
+          'vocab: ' + this._getItemDistribution(i, "vocabulary") +
         ')' +
         '</option>';
       jQuery("#levels-container .levels select").append(option);
@@ -510,27 +571,6 @@ var App = {
 
     this.canStartStudying();
     jQuery("body").attr("class", "levels");
-  },
-
-  /**
-   * Function to help count items by level.
-   */
-  _showLevelsCount: function(type) {
-    var count = [];
-
-    jQuery.each(this.items, function(i, val) {
-      var level = val.level;
-
-      if (typeof count[level] == "undefined") {
-        count[level] = 0;
-      }
-
-      if (val.type == type) {
-        count[level]++;
-      }
-    });
-
-    return count;
   },
 
   /**

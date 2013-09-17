@@ -34,7 +34,9 @@ body.login #login-container {
   margin-bottom: 10px;
 }
 
-#login-container .text-danger, #login-container .text-info, #login-container .status {
+#login-container .text-danger, 
+#login-container .text-info, 
+#login-container .status {
   text-align: center;
 }
 
@@ -55,7 +57,7 @@ body.login #login-container {
 }
 
 #levels-container .levels select {
-  max-height: 250px;
+  height: 200px;
   width: 300px;
 }
 
