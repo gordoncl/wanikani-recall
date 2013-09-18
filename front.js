@@ -321,6 +321,7 @@ var App = {
 
     // Disable button.
     jQuery("#login-container .btn-primary").attr("disabled", "disabled");
+    jQuery("#login-container .text-danger").html("");
 
     // Get the users information and vocabulary.
     this.items = [];
