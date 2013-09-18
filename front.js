@@ -621,6 +621,7 @@ var App = {
       return;
     }
 
+    jQuery("#item-container .remaining").html(this.deck.length);
     jQuery("#item-container .meaning").html(this.item.type + ": " + this.item.meaning);
   },
 
