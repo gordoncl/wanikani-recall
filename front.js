@@ -109,23 +109,23 @@ var App = {
     var levels = this._getStudyLevels();
     var types = this._getStudyTypes();
 
-    if (!levels.length || !types.length) {
+    // Count the number of items to study.
+    var count = 0;
+    for(var i = 0; i < levels.length; i++) {
+      var level = levels[i];
+
+      for(var j = 0; j < types.length; j++) {
+        var type = types[j];
+        count += this._getItemDistribution(level, type);
+      }
+    }
+
+    jQuery("#levels-container .items-to-study").html(count);
+
+    if (!count) {
       jQuery("#levels-container .start-studying").hide();
-      jQuery("#levels-container .items-to-study").html("0");
     } else {
       jQuery("#levels-container .start-studying").show();
-
-      // Count the number of items to study.
-      var count = 0;
-      for(var i = 0; i < levels.length; i++) {
-        var level = levels[i];
-
-        for(var j = 0; j < types.length; j++) {
-          var type = types[j];
-          count += this._getItemDistribution(level, type);
-        }
-      }
-      jQuery("#levels-container .items-to-study").html(count);
     }
   },
 
@@ -325,7 +325,7 @@ var App = {
 
     // Get the users information and vocabulary.
     this.items = [];
-    this._loginGetVocabulary(key);
+    this._loginVerifyUser(key);
   },
 
   /**
@@ -349,7 +349,55 @@ var App = {
   },
 
   /**
-   * Handles an AJAX error.
+   * Retrieves learned material from the server.
+   */
+  _loginDownloadItems: function(key) {
+    jQuery("#login-container .text-info").html("Getting learned material from server");
+
+    var vocabularyUrl = this.getApi(key, 'vocabulary');
+    var kanjiUrl = this.getApi(key, 'kanji');
+    var radicalUrl = this.getApi(key, 'radicals');
+
+    // Asynchronously pull the data at once.
+    jQuery.when( 
+      jQuery.ajax(vocabularyUrl, { timeout: this.API_TIMEOUT }),
+      jQuery.ajax(kanjiUrl, { timeout: this.API_TIMEOUT }),
+      jQuery.ajax(radicalUrl, { timeout: this.API_TIMEOUT })
+    ).then(
+      // Success function.
+      jQuery.proxy(function(vocabResponse, kanjiResponse, radicalResponse) {
+        var vocabResults = vocabResponse[0];
+        var kanjiResults = kanjiResponse[0];
+        var radicalResults = radicalResponse[0];
+
+        // See if the data returned was unexpected.
+        if (this._loginHasErrorResponse(vocabResults) ||
+          this._loginHasErrorResponse(kanjiResults) ||
+          this._loginHasErrorResponse(radicalResults))
+        {
+          return;
+        }
+
+        // If not, add the items.
+        this._addItems(kanjiResults["requested_information"], "kanji");
+        this._addItems(radicalResults["requested_information"], "radical");
+        this._addItems(vocabResults["requested_information"]["general"], "vocabulary");
+
+        // Calculate the distribution.
+        this._setItemDistribution();
+
+        // Show that the user is logged in and display levels container.
+        this.setHeader();
+        this.showLevels(false);
+      }, this),
+
+      // Error response.
+      jQuery.proxy(this._loginErrorHelper, this)
+    );
+  },
+
+  /**
+   * Helper function for to handle timeouts or other AJAX errors.
    */
   _loginErrorHelper: function(xhr, status, message) {
     if (message == "timeout") {
@@ -360,12 +408,12 @@ var App = {
   },
 
   /**
-   * Retrieves the kanji. Takes the API key as a parameter.
+   * Checks to verify the user. 
    */
-  _loginGetKanji: function(key) {
-    var url = this.getApi(key, 'kanji');
+  _loginVerifyUser: function(key) {
+    var url = this.getApi(key, 'user-information');
 
-    jQuery("#login-container .text-info").html("Getting kanji from server");
+    jQuery("#login-container .text-info").html("Verifying user");
     jQuery.ajax(url, {
       error: jQuery.proxy(this._loginErrorHelper, this),
 
@@ -374,73 +422,15 @@ var App = {
         if (this._loginHasErrorResponse(results)) {
           return;
         }
-
-        // Store kanji.
-        this._addItems(results["requested_information"], "kanji");
-
-        // Get the radicals now.
-        this._loginGetRadicals(key);
-      }, this),
-
-      timeout: this.API_TIMEOUT
-    });
-  },
-
-  /**
-   * Retrieves the radicals. Takes the API key as a parameter.
-   */
-  _loginGetRadicals: function(key) {
-    var url = this.getApi(key, 'radicals');
-
-    jQuery("#login-container .text-info").html("Getting radicals from server");
-    jQuery.ajax(url, {
-      error: jQuery.proxy(this._loginErrorHelper, this),
-
-      success: jQuery.proxy(function(results) {
-        // Error exists, print the message.
-        if (this._loginHasErrorResponse(results)) {
-          return;
-        }
-
-        // Store Radicals.
-        this._addItems(results["requested_information"], "radical");
-
-        // Calculate the distribution.
-        this._setItemDistribution();
-
-        // Show that the user is logged in and display levels container.
-        this.setHeader();
-        this.showLevels(false);
-      }, this),
-
-      timeout: this.API_TIMEOUT
-    });
-  },
-
-  /**
-   * Retrieves the vocabulary. Takes the API key as a parameter.
-   */
-  _loginGetVocabulary: function(key) {
-    var url = this.getApi(key, 'vocabulary');
-
-    jQuery("#login-container .text-info").html("Getting vocabulary from server");
-    jQuery.ajax(url, {
-      error: jQuery.proxy(this._loginErrorHelper, this),
-
-      success: jQuery.proxy(function(results) {
-        // Error exists, print the message.
-        if (this._loginHasErrorResponse(results)) {
-          return;
-        }
-
-        this._addItems(results["requested_information"]["general"], "vocabulary");
-        this.user = results["user_information"];
 
         // Store the wanikani key.
         chrome.storage.sync.set({"wanikani-api-key": key});
 
         // Retrieve the Kanji, now.
-        this._loginGetKanji(key);
+        this.user = results["user_information"];
+
+        // Now retrieve the vocabulary.
+        this._loginDownloadItems(key);
       }, this),
 
       timeout: this.API_TIMEOUT
