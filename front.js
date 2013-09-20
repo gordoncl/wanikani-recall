@@ -16,6 +16,8 @@ var App = {
 
   deck: [],
 
+  key: null,
+
   item: null,
 
   items: [],
@@ -351,12 +353,12 @@ var App = {
   /**
    * Retrieves learned material from the server.
    */
-  _loginDownloadItems: function(key) {
+  _loginDownloadItems: function() {
     jQuery("#login-container .text-info").html("Getting learned material from server");
 
-    var vocabularyUrl = this.getApi(key, 'vocabulary');
-    var kanjiUrl = this.getApi(key, 'kanji');
-    var radicalUrl = this.getApi(key, 'radicals');
+    var vocabularyUrl = this.getApi(this.key, 'vocabulary');
+    var kanjiUrl = this.getApi(this.key, 'kanji');
+    var radicalUrl = this.getApi(this.key, 'radicals');
 
     // Asynchronously pull the data at once.
     jQuery.when( 
@@ -388,7 +390,7 @@ var App = {
 
         // Show that the user is logged in and display levels container.
         this.setHeader();
-        this.showLevels(false);
+        this.restoreProgress();
       }, this),
 
       // Error response.
@@ -427,10 +429,11 @@ var App = {
         chrome.storage.sync.set({"wanikani-api-key": key});
 
         // Retrieve the Kanji, now.
+        this.key = key;
         this.user = results["user_information"];
 
         // Now retrieve the vocabulary.
-        this._loginDownloadItems(key);
+        this._loginDownloadItems();
       }, this),
 
       timeout: this.API_TIMEOUT
@@ -440,7 +443,18 @@ var App = {
   /**
    * Handles the event of the logout button being clicked.
    */
-  logout: function() {
+  logout: function(modal) {
+    // If the item container is visible, allow the user to save progress.
+    if (modal && jQuery("#item-container").is(":visible")) {
+      jQuery("#logoutModal").modal('show');
+      return;
+    }
+
+    // Modal is set to false, hide it.
+    if (!modal) {
+      jQuery("#logoutModal").modal('hide');
+    }
+
     jQuery("header .welcome").html("");
     jQuery("#login-container .btn-primary").attr("disabled", null);
     jQuery("#login-container .processing").hide();
@@ -451,6 +465,13 @@ var App = {
    * Would play audio if there was a supporting API to get the file.
    */
   playAudio: function() {},
+
+  /**
+   * Get the key to be used for saving progress.
+   */
+  _progressKey: function() {
+    return this.key + '-progress';
+  },
 
   /**
    * Handles events that reveal the word to the user.
@@ -494,12 +515,68 @@ var App = {
   },
 
   /**
+   * If the user has progressed, restore their last run. If not, show them the levels.
+   */
+  restoreProgress: function() {
+    var key = this._progressKey();
+
+    jQuery("#login-container .text-info").html("Checking for saved progress");
+    chrome.storage.local.get(key, jQuery.proxy(function(results) {
+      jQuery("#login-container .text-info").html("");
+      var results = JSON.parse(results[key] || null);
+
+      // If there are results.
+      if (results && typeof results.deck != "undefined"
+        && typeof results.item != "undefined"
+        && typeof results.previousItems != "undefined") {
+
+        this.deck = results.deck;
+        this.item = results.item;
+        this.previousItems = results.previousItems;
+
+        this.showNextItem();
+        this.showLastItem();
+
+        jQuery('body').attr('class', 'item');
+
+        // Remove the results.
+        chrome.storage.local.remove(key);
+      }
+
+      // If no results, just show levels.
+      else {
+        this.showLevels(false);
+      }
+    }, this));
+  },
+
+  /**
+   * Saves the users current progress and let's them start 
+   * from where they left off.
+   */
+  saveProgress: function() {
+    var storage = {};
+
+    // Stringifying, because, for some reason, chrome does not
+    // seem to recover the JSON object properly.
+    storage[this._progressKey()] = JSON.stringify({
+      deck: this.deck,
+      item: this.item,
+      previousItems: this.previousItems
+    });
+
+    chrome.storage.local.set(storage, jQuery.proxy(function() {
+      this.logout(false);
+    }, this));
+  },
+
+  /**
    * Sets the welcome header once the user logs in.
    */
   setHeader: function() {
     jQuery("#login-container .text-info").html("");
     jQuery("header .welcome").html("Welcome " + this.user.username + 
-      ": <button class='btn btn-link logout'>Logout</button>");
+      ": <a class='logout'>Logout</a>");
   },
 
   /**
@@ -642,8 +719,10 @@ chrome.storage.sync.get("wanikani-api-key", function(results) {
 // Used the API to get the user level.
 jQuery(document).on("click", "#login-container .btn-primary[disabled!=disabled]", jQuery.proxy(App.login, App));
 
-// If user clicks the logout button
-jQuery(document).on("click", "header .logout", jQuery.proxy(App.logout, App));
+// If user clicks any of the logout button(s)
+jQuery(document).on("click", "header .logout", function(e) { App.logout(true); });
+jQuery(document).on("click", "#logoutModal .modal-logout", function(e) { App.logout(false); });
+jQuery(document).on("click", "#logoutModal .modal-save", function(e) { App.saveProgress(); });
 
 // User makes a change to study levels.
 jQuery(document).on("change", "#levels-container input", jQuery.proxy(App.canStartStudying, App));
