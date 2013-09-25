@@ -226,6 +226,15 @@ var App = {
   },
 
   /**
+   * Happens when the audio finishes.
+   */
+  endAudio: function() {
+    jQuery("#item-container .audio .glyphicon").
+      removeClass("glyphicon-volume-up").
+      addClass("glyphicon-volume-down");
+  },
+
+  /**
    * Retrieves a wanikani API endpoint.
    */
   getApi: function(key, resource, arguments) {
@@ -464,7 +473,12 @@ var App = {
   /**
    * Would play audio if there was a supporting API to get the file.
    */
-  playAudio: function() {},
+  playAudio: function() {
+    jQuery("#item-container audio")[0].play();
+    jQuery("#item-container .audio .glyphicon").
+      removeClass("glyphicon-volume-down").
+      addClass("glyphicon-volume-up");
+  },
 
   /**
    * Get the key to be used for saving progress.
@@ -678,9 +692,17 @@ var App = {
 
     // If previous words is only length one, hide the button.
     if (this.previousItems.length == 1) {
-      jQuery("#item-container button.back").hide();
+      jQuery("#item-container button.back").attr("disabled", true);
     } else {
-      jQuery("#item-container button.back").show();
+      jQuery("#item-container button.back").attr("disabled", false);
+    }
+
+    // If the item has an audio file, load it up.
+    if (typeof AudioLookup[this.item.character] != "undefined") {
+      jQuery("#item-container audio").attr("src", AudioLookup[this.item.character]);
+      jQuery("#item-container button.audio").attr("disabled", false);
+    } else {
+      jQuery("#item-container button.audio").attr("disabled", true);
     }
 
     // No words? Show levels, again.
@@ -732,10 +754,14 @@ jQuery(document).on("change", "#levels-container select", jQuery.proxy(App.canSt
 jQuery(document).on("click", "#levels-container .start-studying", jQuery.proxy(App.startStudying, App));
 
 // When the user clicks the audio button.
-jQuery(document).on("click", "#item-container button.audio", jQuery.proxy(App.playAudio, App));
+jQuery(document).on("click", "#item-container button.audio:not([disabled])", jQuery.proxy(App.playAudio, App));
+
+// When the audio ends. Since the ended event does not trigger the document, need
+// to bind directly to the audio element.
+jQuery("#item-container audio").on("ended", jQuery.proxy(App.endAudio, App));
 
 // When the user clicks the back button.
-jQuery(document).on("click", "#item-container button.back", jQuery.proxy(App.showLastItem, App));
+jQuery(document).on("click", "#item-container button.back:not([disabled])", jQuery.proxy(App.showLastItem, App));
 
 // When the user clicks the reveal button.
 jQuery(document).on("click", "#item-container .paper-wrapper", jQuery.proxy(App.revealItem, App));
@@ -754,6 +780,10 @@ jQuery(window).on("keydown", function(e) {
   if (jQuery("#item-container :visible").length > 0) {
 
     switch(String.fromCharCode(e.keyCode)) {
+      case "a":
+      case "A":
+        jQuery("#item-container button.audio:not([disabled])").click();
+        break;
       case "c":
       case "C":
         jQuery("#item-container button.clear").click();
@@ -764,7 +794,7 @@ jQuery(window).on("keydown", function(e) {
         break;
       case "b":
       case "B":
-        jQuery("#item-container button.back").click();
+        jQuery("#item-container button.back:not([disabled])").click();
         break;
       case "n":
       case "N":
