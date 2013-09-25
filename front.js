@@ -698,7 +698,9 @@ var App = {
     }
 
     // If the item has an audio file, load it up.
-    if (typeof AudioLookup[this.item.character] != "undefined") {
+    if (this.item.type == "vocabulary" && 
+      typeof AudioLookup[this.item.character] != "undefined") 
+    {
       jQuery("#item-container audio").attr("src", AudioLookup[this.item.character]);
       jQuery("#item-container button.audio").attr("disabled", false);
     } else {
