@@ -697,6 +697,12 @@ var App = {
       jQuery("#item-container button.back").attr("disabled", false);
     }
 
+    // If the item is undefined, go back to the levels menu.
+    if (typeof this.item == 'undefined') {
+      this.showLevels(true);
+      return;
+    }
+
     // If the item has an audio file, load it up.
     if (this.item.type == "vocabulary" && 
       typeof AudioLookup[this.item.character] != "undefined") 
@@ -705,12 +711,6 @@ var App = {
       jQuery("#item-container button.audio").attr("disabled", false);
     } else {
       jQuery("#item-container button.audio").attr("disabled", true);
-    }
-
-    // No words? Show levels, again.
-    if (typeof this.item == 'undefined') {
-      this.showLevels(true);
-      return;
     }
 
     jQuery("#item-container .remaining").html(this.deck.length);
