@@ -481,6 +481,20 @@ var App = {
   },
 
   /**
+   * Action that occurs when user agrees to have progress restored.
+   */
+  progressModalRestore: function() {
+    // Push current item back into deck.
+    if (this.previousItems.length >= 1) {
+      this.deck.push(this.previousItems.pop());
+    }
+    this.showNextItem();
+
+    jQuery('body').attr('class', 'item');
+    jQuery("#progressModal").modal('hide');
+  },
+
+  /**
    * Get the key to be used for saving progress.
    */
   _progressKey: function() {
@@ -548,13 +562,11 @@ var App = {
         this.item = results.item;
         this.previousItems = results.previousItems;
 
-        this.showNextItem();
-        this.showLastItem();
-
-        jQuery('body').attr('class', 'item');
-
         // Remove the results.
         chrome.storage.local.remove(key);
+
+        // Prompt user to restore results.
+        jQuery("#progressModal").modal('show');
       }
 
       // If no results, just show levels.
@@ -635,6 +647,9 @@ var App = {
       "Congratulations! You finished all your words!" : 
       "");
 
+    // Hide progress modal (if it was shown).
+    jQuery("#progressModal").modal('hide');
+
     // Get user levels and iterate through to show the levels they
     // can partake in.
     jQuery("#levels-container .levels select").html("");
@@ -659,7 +674,7 @@ var App = {
    * Handles when the back button is clicked.
    */
   showLastItem: function() {
-    // Because the current word is in the deck, we need
+    // Because the current word is in the previousItems list, we need
     // to push twice.
     if (this.previousItems.length > 1) {
       this.deck.push(this.previousItems.pop());
@@ -742,6 +757,10 @@ chrome.storage.sync.get("wanikani-api-key", function(results) {
 // If the user clicks on the submit button on login page. 
 // Used the API to get the user level.
 jQuery(document).on("click", "#login-container .btn-primary[disabled!=disabled]", jQuery.proxy(App.login, App));
+
+// Functionality for restoring the Apps progress.
+jQuery(document).on("click", "#progressModal .modal-yes", jQuery.proxy(App.progressModalRestore, App));
+jQuery(document).on("click", "#progressModal .modal-no", jQuery.proxy(App.showLevels, App));
 
 // If user clicks any of the logout button(s)
 jQuery(document).on("click", "header .logout", function(e) { App.logout(true); });
