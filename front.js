@@ -44,7 +44,7 @@ var App = {
       }
 
       // Not studied yet.
-      if (typeof item.stats == "undefined" || !item.stats) {
+      if (typeof item.user_specific == "undefined" || !item.user_specific) {
         return false;
       }
 
